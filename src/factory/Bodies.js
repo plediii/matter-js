@@ -196,7 +196,7 @@ var Vector = require('../geometry/Vector');
      * @return {body}
      */
     Bodies.fromVertices = function(x, y, vertexSets, options, flagInternal, removeCollinear, minimumArea) {
-        var decomp = global.decomp || require('poly-decomp'),
+        var decomp = null,
             body,
             parts,
             isConvex,
@@ -214,10 +214,6 @@ var Vector = require('../geometry/Vector');
         removeCollinear = typeof removeCollinear !== 'undefined' ? removeCollinear : 0.01;
         minimumArea = typeof minimumArea !== 'undefined' ? minimumArea : 10;
 
-        if (!decomp) {
-            Common.warn('Bodies.fromVertices: poly-decomp.js required. Could not decompose vertices. Fallback to convex hull.');
-        }
-
         // ensure vertexSets is an array of arrays
         if (!Common.isArray(vertexSets[0])) {
             vertexSets = [vertexSets];
@@ -225,57 +221,17 @@ var Vector = require('../geometry/Vector');
 
         for (v = 0; v < vertexSets.length; v += 1) {
             vertices = vertexSets[v];
-            isConvex = Vertices.isConvex(vertices);
-
-            if (isConvex || !decomp) {
-                if (isConvex) {
-                    vertices = Vertices.clockwiseSort(vertices);
-                } else {
-                    // fallback to convex hull when decomposition is not possible
-                    vertices = Vertices.hull(vertices);
-                }
-
-                parts.push({
-                    position: { x: x, y: y },
-                    vertices: vertices
-                });
+            if (isConvex) {
+                vertices = Vertices.clockwiseSort(vertices);
             } else {
-                // initialise a decomposition
-                var concave = vertices.map(function(vertex) {
-                    return [vertex.x, vertex.y];
-                });
-
-                // vertices are concave and simple, we can decompose into parts
-                decomp.makeCCW(concave);
-                if (removeCollinear !== false)
-                    decomp.removeCollinearPoints(concave, removeCollinear);
-
-                // use the quick decomposition algorithm (Bayazit)
-                var decomposed = decomp.quickDecomp(concave);
-
-                // for each decomposed chunk
-                for (i = 0; i < decomposed.length; i++) {
-                    var chunk = decomposed[i];
-
-                    // convert vertices into the correct structure
-                    var chunkVertices = chunk.map(function(vertices) {
-                        return {
-                            x: vertices[0],
-                            y: vertices[1]
-                        };
-                    });
-
-                    // skip small chunks
-                    if (minimumArea > 0 && Vertices.area(chunkVertices) < minimumArea)
-                        continue;
-
-                    // create a compound part
-                    parts.push({
-                        position: Vertices.centre(chunkVertices),
-                        vertices: chunkVertices
-                    });
-                }
+                // fallback to convex hull when decomposition is not possible
+                vertices = Vertices.hull(vertices);
             }
+
+            parts.push({
+                position: { x: x, y: y },
+                vertices: vertices
+            });
         }
 
         // create body parts
